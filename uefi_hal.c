@@ -154,7 +154,7 @@ void Menu_GraphicsBall() {
     UINT32 H = (UINT32)HAL_GetVideoHeight();
     
     int x = 100, y = 100;
-    int dx = 5, dy = 5;
+    int dx = 2, dy = 2;
     int size = 30;
     int size2 = 30;
     int paused = 0;
@@ -166,24 +166,26 @@ void Menu_GraphicsBall() {
             if (Key.UnicodeChar == L' ') paused = 1 - paused;
         }
 
-        for(int i = 0; i < size; i++) {
-            for(int j = 0; j < size2; j++) {
-                Base[(y+j) * W + (x+i)] = 0x00000000; 
-            }
-        }
-
         if (!paused) {
-        x += dx; y += dy;
-        }
+            for(int i = 0; i < size; i++) {
+                for(int j = 0; j < size2; j++) {
+                    Base[(y+j) * W + (x+i)] = 0x00000000; 
+                }
+            }
 
-        if (x <= 0 || x >= (int)W - size) dx = -dx;
-        if (y <= 0 || y >= (int)H - size) dy = -dy;
+            x += dx; y += dy;
 
-        for(int i = 0; i < size; i++) {
-            for(int j = 0; j < size2; j++) {
-                Base[(y+j) * W + (x+i)] = 0x00FFFF00; 
+            if (x <= 0 || x >= (int)W - size) dx = -dx;
+            if (y <= 0 || y >= (int)H - size) dy = -dy;
+            for(int i = 0; i < size; i++) {
+                for(int j = 0; j < size2; j++) {
+                    Base[(y+j) * W + (x+i)] = 0x00FFFF00; 
+                }
             }
         }
+
+
+        
 
         for(volatile int d = 0; d < 1000000; d++);
     }
@@ -207,7 +209,6 @@ void Menu_ColorCalibration() {
 
     while (1) {
         EFI_INPUT_KEY Key;
-        // Check for key press
         if (gST->ConIn->ReadKeyStroke(gST->ConIn, &Key) == 0) {
             UINT32 color = 0;
             int apply = 0;
@@ -246,14 +247,126 @@ void Menu_ColorCalibration() {
     }
 }
 
+CHAR16 *VarName = L"TeamID";
+
+void Menu_TeamSettings() {
+    __attribute__((aligned(8))) static EFI_GUID LocalGuid = { 0x8BE4DF61, 0x93CA, 0x11d2, {0xAA, 0x0D, 0x00, 0xE0, 0x98, 0x03, 0x2B, 0x8C} };
+    __attribute__((aligned(8))) CHAR16 *LocalVarName = L"TeamID";
+    
+    EFI_GET_VARIABLE GetVar = (EFI_GET_VARIABLE)gST->RuntimeServices->_ptrs[6];
+    EFI_SET_VARIABLE SetVar = (EFI_SET_VARIABLE)gST->RuntimeServices->_ptrs[8];
+
+    CHAR16 team_id[20];
+    UINTN data_size = sizeof(team_id);
+    memset(team_id, 0, data_size);
+
+    EFI_STATUS status = GetVar(LocalVarName, &LocalGuid, NULL, &data_size, team_id);
+
+    HAL_ClearTextScreen();
+    HAL_Print(L"--- TEAM SETTINGS (NVRAM) ---\r\n\n");
+    
+    if (status == 0) {
+        HAL_Print(L"Current ID: ");
+        HAL_Print(team_id);
+    } else {
+        HAL_Print(L"Current ID: (Not Set)\r\n");
+        HAL_Print(L"Status Code: ");
+        CHAR16 err_str[20];
+        HAL_Itoa(status, err_str, 16);
+        HAL_Print(err_str);
+    }
+
+    HAL_Print(L"\r\n\n[S] Save 'Team_08' | [ESC] Return\r\n");
+
+    while (1) {
+        EFI_INPUT_KEY Key;
+        if (gST->ConIn->ReadKeyStroke(gST->ConIn, &Key) == 0) {
+            if (Key.ScanCode == 0x17) break; // ESC
+            
+            if (Key.UnicodeChar == L's' || Key.UnicodeChar == L'S') {
+                CHAR16 *newData = L"Team_08";
+                // 16 bytes = (7 chars + 1 null terminator) * 2 bytes/char
+                UINTN newDataSize = 16; 
+
+                status = SetVar(LocalVarName, &LocalGuid, 
+                                EFI_VARIABLE_NON_VOLATILE | 
+                                EFI_VARIABLE_BOOTSERVICE_ACCESS | 
+                                EFI_VARIABLE_RUNTIME_ACCESS, 
+                                newDataSize, (void*)newData);
+                
+                if (status == 0) {
+                    HAL_Print(L"\r\nSuccess! Team ID updated.");
+                } else {
+                    HAL_Print(L"\r\nSetVar Error: ");
+                    CHAR16 err_s[20];
+                    HAL_Itoa(status, err_s, 16);
+                    HAL_Print(err_s);
+                }
+            }
+        }
+    }
+}
+
+void Menu_SystemControl() {
+    EFI_RESET_SYSTEM ResetSystem = gST->RuntimeServices->ResetSystem;
+    
+    EFI_SET_VARIABLE SetVar = (EFI_SET_VARIABLE)gST->RuntimeServices->_ptrs[8];
+
+    while (1) {
+        HAL_ClearTextScreen();
+        HAL_Print(L"--- SYSTEM CONTROL ---\r\n\n");
+        HAL_Print(L"1. Shutdown (Power Off)\r\n");
+        HAL_Print(L"2. Reboot (Cold Reset)\r\n");
+        HAL_Print(L"3. Reboot to Firmware (BIOS Settings)\r\n");
+        HAL_Print(L"ESC. Return\r\n");
+
+        EFI_INPUT_KEY Key;
+        while (gST->ConIn->ReadKeyStroke(gST->ConIn, &Key) != 0);
+
+        if (Key.ScanCode == 0x17) break; // ESC key
+
+        if (Key.UnicodeChar == L'1') {
+            ResetSystem(EfiResetShutdown, 0, 0, NULL);
+        }
+        else if (Key.UnicodeChar == L'2') {
+            ResetSystem(EfiResetCold, 0, 0, NULL);
+        }
+        else if (Key.UnicodeChar == L'3') {
+            UINT64 indications = 0x0000000000000001;
+            __attribute__((aligned(8))) EFI_GUID GlobalGuid = { 0x8BE4DF61, 0x93CA, 0x11d2, {0xAA, 0x0D, 0x00, 0xE0, 0x98, 0x03, 0x2B, 0x8C} };
+            
+            SetVar(L"OsIndications", &GlobalGuid, 
+                   EFI_VARIABLE_NON_VOLATILE | EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS, 
+                   sizeof(UINT64), &indications);
+
+            ResetSystem(EfiResetWarm, 0, 0, NULL);
+        }
+    }
+}
+
 void HAL_Menu_System() {
     int selected = 0;
     int totalItems = 5;
     EFI_INPUT_KEY Key;
+    CHAR16 *LocalVarName = L"TeamID";
 
     while (1) {
         HAL_ClearTextScreen();
+
+        CHAR16 team_id[20];
+        UINTN d_size = sizeof(team_id);
+        memset(team_id, 0, d_size);
+
+        EFI_GET_VARIABLE GetVar = (EFI_GET_VARIABLE)gST->RuntimeServices->_ptrs[6];
+        GetVar(LocalVarName, (EFI_GUID*)&EFI_GLOBAL_VARIABLE_GUID, NULL, &d_size, team_id);
+        
         HAL_Print(L"=== TEAM_08 UEFI OVERLORD ===\r\n");
+        if (team_id[0] != 0) {
+            HAL_Print(L"Current ID: ");
+            HAL_Print(team_id);
+            HAL_Print(L"\r\n");
+        }
+
         HAL_Print(L"Use UP/DOWN arrows and ENTER to select\r\n\n");
 
         PrintMenuItem(L" 1. System Information (CPUID/Memory) ", (selected == 0));
@@ -262,22 +375,16 @@ void HAL_Menu_System() {
         PrintMenuItem(L" 4. Team Settings (NVRAM)             ", (selected == 3));
         PrintMenuItem(L" 5. System Control (Power/Reset)      ", (selected == 4));
 
-        // Wait for key press
         while (gST->ConIn->ReadKeyStroke(gST->ConIn, &Key) != 0);
 
-        // UEFI ScanCodes: 0x01 is Up, 0x02 is Down
         if (Key.ScanCode == 0x01 && selected > 0) selected--;
         else if (Key.ScanCode == 0x02 && selected < totalItems - 1) selected++;
-        else if (Key.UnicodeChar == L'\r') { // Enter Key
-            if (selected == 0) {
-                Menu_SystemInfo();
-            }
-            if(selected == 1) {
-                Menu_GraphicsBall();
-            }
-            if(selected == 2) {
-                Menu_ColorCalibration();
-            }
+        else if (Key.UnicodeChar == L'\r') {
+            if (selected == 0) Menu_SystemInfo();
+            if (selected == 1) Menu_GraphicsBall();
+            if (selected == 2) Menu_ColorCalibration();
+            if (selected == 3) Menu_TeamSettings();
+            if (selected == 4) Menu_SystemControl();
         }
     }
 }
