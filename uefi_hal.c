@@ -59,10 +59,18 @@ void HAL_Beep() {
     // کد قدیمی پورت 61 (ممکن است روی همه سیستم‌ها کار نکند ولی استاندارد آموزشی است)
     // اسمبلی هم می‌توانست این کار را کند، ولی گذاشتیم اینجا که راحت باشید
     asm volatile (
-        "mov $0x61, %%dx; in %%dx, %%al; or $3, %%al; out %%al, %%dx;"
-        "mov $0x5000000, %%rcx; 1: dec %%rcx; jnz 1b;" // Delay
-        "in %%dx, %%al; and $0xFC, %%al; out %%al, %%dx;"
-        ::: "rax", "rdx", "rcx"
+        "mov $0x61, %%dx \n\t"
+        "in %%dx, %%al \n\t"
+        "or $3, %%al \n\t"
+        "out %%al, %%dx \n\t"
+        "mov $0x5000000, %%rcx \n\t"
+        "beep_delay: \n\t" 
+        "dec %%rcx \n\t"
+        "jnz beep_delay \n\t"
+        "in %%dx, %%al \n\t"
+        "and $0xFC, %%al \n\t"
+        "out %%al, %%dx"
+        : : : "rax", "rdx", "rcx"
     );
 }
 
@@ -134,7 +142,7 @@ void Menu_SystemInfo() {
     UINT32 DescriptorVersion;
     
     gST->BootServices->GetMemoryMap(&MapSize, NULL, &MapKey, &DescriptorSize, &DescriptorVersion);
-    MapSize += 2048;
+    MapSize += 32768;
     
     HAL_Print(L"Calculated Map Size: ");
     CHAR16 size_str[20];

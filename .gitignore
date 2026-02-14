@@ -1,0 +1,6 @@
+BOOTX64.EFI
+main.obj
+uefi_hal.obj
+iso/NvVars
+iso/EFI/BOOT/BOOTX64.EFI
+iso/EFI/BOOT/BOOTX64.EFI
